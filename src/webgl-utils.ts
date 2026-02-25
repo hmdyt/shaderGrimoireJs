@@ -132,6 +132,7 @@ export const mat4 = {
 export interface Geometry {
 	vertices: Float32Array;
 	normals: Float32Array;
+	uvs: Float32Array;
 	indices: Uint16Array;
 }
 
@@ -206,12 +207,28 @@ export function createCube(): Geometry {
 		23, // 左面
 	]);
 
-	return { vertices, normals, indices };
+	const uvs = new Float32Array([
+		// 前面
+		0, 0, 1, 0, 1, 1, 0, 1,
+		// 背面
+		1, 0, 1, 1, 0, 1, 0, 0,
+		// 上面
+		0, 0, 0, 1, 1, 1, 1, 0,
+		// 下面
+		0, 1, 1, 1, 1, 0, 0, 0,
+		// 右面
+		0, 0, 0, 1, 1, 1, 1, 0,
+		// 左面
+		1, 0, 0, 0, 0, 1, 1, 1,
+	]);
+
+	return { vertices, normals, uvs, indices };
 }
 
 export function createSphere(segments = 32, rings = 16): Geometry {
 	const vertices: number[] = [];
 	const normals: number[] = [];
+	const uvs: number[] = [];
 	const indices: number[] = [];
 
 	for (let y = 0; y <= rings; y++) {
@@ -228,6 +245,7 @@ export function createSphere(segments = 32, rings = 16): Geometry {
 
 			vertices.push(nx, ny, nz);
 			normals.push(nx, ny, nz);
+			uvs.push(u, v);
 		}
 	}
 
@@ -243,6 +261,7 @@ export function createSphere(segments = 32, rings = 16): Geometry {
 	return {
 		vertices: new Float32Array(vertices),
 		normals: new Float32Array(normals),
+		uvs: new Float32Array(uvs),
 		indices: new Uint16Array(indices),
 	};
 }
@@ -252,7 +271,19 @@ export function createPlane(): Geometry {
 
 	const normals = new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]);
 
+	const uvs = new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]);
+
 	const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
 
-	return { vertices, normals, indices };
+	return { vertices, normals, uvs, indices };
+}
+
+export function createScreen(width = 4, height = 3): Geometry {
+	const hw = width / 2;
+	const hh = height / 2;
+	const vertices = new Float32Array([-hw, -hh, 0, hw, -hh, 0, hw, hh, 0, -hw, hh, 0]);
+	const normals = new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]);
+	const uvs = new Float32Array([0, 1, 1, 1, 1, 0, 0, 0]);
+	const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
+	return { vertices, normals, uvs, indices };
 }
