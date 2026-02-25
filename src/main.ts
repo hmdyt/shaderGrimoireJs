@@ -50,24 +50,48 @@ meshes[1].position.set(0, 0.5, 0);
 meshes[2].position.set(2.5, 0.3, 0);
 for (const mesh of meshes) scene.add(mesh);
 
-// RTT
-const RTT_SIZE = 512;
-const renderTarget = new THREE.WebGLRenderTarget(RTT_SIZE, RTT_SIZE);
-const rtCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-
-// Screen
-const screenMesh = new THREE.Mesh(
-	new THREE.PlaneGeometry(6, 4),
-	new THREE.MeshBasicMaterial({ map: renderTarget.texture }),
+// Post-processing render target
+const renderTarget = new THREE.WebGLRenderTarget(
+	window.innerWidth * window.devicePixelRatio,
+	window.innerHeight * window.devicePixelRatio,
 );
-screenMesh.position.set(0, 2, -8);
-scene.add(screenMesh);
+
+// Monochrome post-process
+const monoMaterial = new THREE.ShaderMaterial({
+	uniforms: {
+		tDiffuse: { value: renderTarget.texture },
+	},
+	vertexShader: /* glsl */ `
+		varying vec2 vUv;
+		void main() {
+			vUv = uv;
+			gl_Position = vec4(position, 1.0);
+		}
+	`,
+	fragmentShader: /* glsl */ `
+		precision highp float;
+		uniform sampler2D tDiffuse;
+		varying vec2 vUv;
+		void main() {
+			vec4 color = texture2D(tDiffuse, vUv);
+			float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+			gl_FragColor = vec4(vec3(gray), color.a);
+		}
+	`,
+	depthTest: false,
+	depthWrite: false,
+});
+
+const postScene = new THREE.Scene();
+postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), monoMaterial));
+const postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
 // Resize
 window.addEventListener("resize", () => {
 	camera.aspect = window.innerWidth / window.innerHeight;
 	camera.updateProjectionMatrix();
 	renderer.setSize(window.innerWidth, window.innerHeight);
+	renderTarget.setSize(window.innerWidth * window.devicePixelRatio, window.innerHeight * window.devicePixelRatio);
 });
 
 // Animation
@@ -80,21 +104,13 @@ function render() {
 	pointLight.position.x = Math.sin(t * 0.5) * 5;
 	pointLight.position.z = Math.cos(t * 0.5) * 5;
 
-	// RTTカメラをメインカメラと同期
-	rtCamera.position.copy(camera.position);
-	rtCamera.quaternion.copy(camera.quaternion);
-
-	// Pass 1: RTT
-	screenMesh.visible = false;
+	// Pass 1: シーンをレンダーターゲットに描画
 	renderer.setRenderTarget(renderTarget);
-	renderer.setClearColor(0x1a1a2e);
-	renderer.render(scene, rtCamera);
-	renderer.setClearColor(0xffffff);
-
-	// Pass 2: Screen
-	screenMesh.visible = true;
-	renderer.setRenderTarget(null);
 	renderer.render(scene, camera);
+
+	// Pass 2: モノクロシェーダーで画面に描画
+	renderer.setRenderTarget(null);
+	renderer.render(postScene, postCamera);
 
 	controls.update();
 	requestAnimationFrame(render);
