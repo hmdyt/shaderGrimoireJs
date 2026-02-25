@@ -1,10 +1,6 @@
 // WebGL2ユーティリティ
 
-export function createShader(
-	gl: WebGL2RenderingContext,
-	type: number,
-	source: string,
-): WebGLShader {
+export function createShader(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
 	const shader = gl.createShader(type);
 	if (!shader) throw new Error("シェーダーの作成に失敗");
 
@@ -47,12 +43,7 @@ export const mat4 = {
 		return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 	},
 
-	perspective(
-		fov: number,
-		aspect: number,
-		near: number,
-		far: number,
-	): Float32Array {
+	perspective(fov: number, aspect: number, near: number, far: number): Float32Array {
 		const f = 1.0 / Math.tan(fov / 2);
 		const nf = 1 / (near - far);
 		return new Float32Array([
@@ -88,11 +79,7 @@ export const mat4 = {
 		len = Math.sqrt(xx * xx + xy * xy + xz * xz);
 		const x = [xx / len, xy / len, xz / len];
 
-		const y = [
-			z[1] * x[2] - z[2] * x[1],
-			z[2] * x[0] - z[0] * x[2],
-			z[0] * x[1] - z[1] * x[0],
-		];
+		const y = [z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0]];
 
 		return new Float32Array([
 			x[0],
@@ -118,11 +105,7 @@ export const mat4 = {
 		const out = new Float32Array(16);
 		for (let i = 0; i < 4; i++) {
 			for (let j = 0; j < 4; j++) {
-				out[i * 4 + j] =
-					a[j] * b[i * 4] +
-					a[4 + j] * b[i * 4 + 1] +
-					a[8 + j] * b[i * 4 + 2] +
-					a[12 + j] * b[i * 4 + 3];
+				out[i * 4 + j] = a[j] * b[i * 4] + a[4 + j] * b[i * 4 + 1] + a[8 + j] * b[i * 4 + 2] + a[12 + j] * b[i * 4 + 3];
 			}
 		}
 		return out;

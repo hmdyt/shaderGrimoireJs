@@ -1,11 +1,4 @@
-import {
-	type Geometry,
-	createCube,
-	createProgram,
-	createShader,
-	createSphere,
-	mat4,
-} from "./webgl-utils";
+import { type Geometry, createCube, createProgram, createShader, createSphere, mat4 } from "./webgl-utils";
 
 import fragmentSource from "./shaders/fragment.glsl";
 import vertexSource from "./shaders/vertex.glsl";
@@ -53,11 +46,7 @@ interface Mesh {
 	color: [number, number, number];
 }
 
-function createMesh(
-	geometry: Geometry,
-	position: [number, number, number],
-	color: [number, number, number],
-): Mesh {
+function createMesh(geometry: Geometry, position: [number, number, number], color: [number, number, number]): Mesh {
 	const vao = gl.createVertexArray();
 	if (!vao) throw new Error("VAOの作成に失敗");
 	gl.bindVertexArray(vao);
@@ -113,10 +102,7 @@ canvas.addEventListener("mousemove", (e) => {
 	const dy = e.clientY - lastMouseY;
 	cameraRotationY -= dx * 0.005;
 	cameraRotationX += dy * 0.005;
-	cameraRotationX = Math.max(
-		-Math.PI / 2,
-		Math.min(Math.PI / 2, cameraRotationX),
-	);
+	cameraRotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraRotationX));
 	lastMouseX = e.clientX;
 	lastMouseY = e.clientY;
 });
@@ -141,11 +127,9 @@ function render(time: number) {
 	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	gl.useProgram(program);
 
-	const cameraX =
-		Math.sin(cameraRotationY) * Math.cos(cameraRotationX) * cameraDistance;
+	const cameraX = Math.sin(cameraRotationY) * Math.cos(cameraRotationX) * cameraDistance;
 	const cameraY = Math.sin(cameraRotationX) * cameraDistance;
-	const cameraZ =
-		Math.cos(cameraRotationY) * Math.cos(cameraRotationX) * cameraDistance;
+	const cameraZ = Math.cos(cameraRotationY) * Math.cos(cameraRotationX) * cameraDistance;
 	const cameraPosition = [cameraX, cameraY, cameraZ];
 
 	const aspect = canvas.width / canvas.height;
