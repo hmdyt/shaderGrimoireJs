@@ -90,11 +90,12 @@ for (const obj of objects) scene.add(obj);
 
 const rtWidth = window.innerWidth * window.devicePixelRatio;
 const rtHeight = window.innerHeight * window.devicePixelRatio;
+const depthTexture = new THREE.DepthTexture(rtWidth, rtHeight);
+depthTexture.format = THREE.DepthFormat;
+depthTexture.type = THREE.UnsignedIntType;
 const renderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight, {
-	depthTexture: new THREE.DepthTexture(rtWidth, rtHeight),
+	depthTexture,
 });
-renderTarget.depthTexture.format = THREE.DepthFormat;
-renderTarget.depthTexture.type = THREE.UnsignedIntType;
 
 const POST_VERTEX = /* glsl */ `
 	varying vec2 vUv;
