@@ -5,284 +5,124 @@ const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({ canvas });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setClearColor(0x000000);
+renderer.setClearColor(0xffffff);
 
 const scene = new THREE.Scene();
 
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.setFromSphericalCoords(8, Math.PI / 2 - 0.4, 0);
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(0, 1.6, 15);
 camera.lookAt(0, 0, 0);
 
 const controls = new OrbitControls(camera, canvas);
-controls.minDistance = 3;
-controls.maxDistance = 20;
-controls.enableDamping = true;
+controls.minDistance = 0;
+controls.maxDistance = 0.01;
+controls.enableDamping = false;
+controls.target.copy(camera.position).add(new THREE.Vector3(0, 0, -0.01));
 
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
-scene.add(ambientLight);
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-const pointLight = new THREE.PointLight(0xffffff, 200);
-pointLight.position.set(0, 5, 5);
-scene.add(pointLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+dirLight.position.set(5, 10, 7);
+scene.add(dirLight);
 
-const meshes = [
-	new THREE.Mesh(
-		new THREE.BoxGeometry(2, 2, 2),
-		new THREE.MeshPhongMaterial({ color: 0xe64d4d, shininess: 32, specular: 0x999999 }),
-	),
-	new THREE.Mesh(
-		new THREE.SphereGeometry(1, 32, 16),
-		new THREE.MeshPhongMaterial({ color: 0x4de666, shininess: 32, specular: 0x999999 }),
-	),
-	new THREE.Mesh(
-		new THREE.BoxGeometry(2, 2, 2),
-		new THREE.MeshPhongMaterial({ color: 0x4d66e6, shininess: 32, specular: 0x999999 }),
-	),
-];
-meshes[0].position.set(-2.5, 0.5, 0);
-meshes[1].position.set(0, 0.5, 0);
-meshes[2].position.set(2.5, 0.3, 0);
-for (const mesh of meshes) scene.add(mesh);
+const floor = new THREE.Mesh(
+	new THREE.PlaneGeometry(100, 100),
+	new THREE.MeshPhongMaterial({ color: 0xcccccc }),
+);
+floor.rotation.x = -Math.PI / 2;
+scene.add(floor);
 
-const rtWidth = window.innerWidth * window.devicePixelRatio;
-const rtHeight = window.innerHeight * window.devicePixelRatio;
-const renderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight, {
-	type: THREE.FloatType,
-});
+const grid = new THREE.GridHelper(100, 50, 0x666666, 0x666666);
+grid.position.y = 0.01;
+scene.add(grid);
 
-const POST_VERTEX = /* glsl */ `
-	varying vec2 vUv;
-	void main() {
-		vUv = uv;
-		gl_Position = vec4(position, 1.0);
-	}
-`;
+const objects: THREE.Mesh[] = [];
 
-const brightnessTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight, {
-	type: THREE.FloatType,
-});
-const brightnessMaterial = new THREE.ShaderMaterial({
-	uniforms: {
-		tDiffuse: { value: renderTarget.texture },
-		uThreshold: { value: 0.8 },
-	},
-	vertexShader: POST_VERTEX,
-	fragmentShader: /* glsl */ `
-		precision highp float;
-		uniform sampler2D tDiffuse;
-		uniform float uThreshold;
-		varying vec2 vUv;
+objects.push(new THREE.Mesh(
+	new THREE.BoxGeometry(2, 2, 2),
+	new THREE.MeshPhongMaterial({ color: 0xe64d4d, shininess: 64, specular: 0x444444 }),
+));
+objects[objects.length - 1].position.set(-3, 1, 2);
 
-		void main() {
-			vec4 color = texture2D(tDiffuse, vUv);
-			float luminance = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
-			if (luminance < uThreshold) {
-				gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-			} else {
-				gl_FragColor = color;
-			}
-		}
-	`,
-	depthTest: false,
-	depthWrite: false,
-});
+objects.push(new THREE.Mesh(
+	new THREE.SphereGeometry(1.2, 32, 16),
+	new THREE.MeshPhongMaterial({ color: 0x4de666, shininess: 64, specular: 0x444444 }),
+));
+objects[objects.length - 1].position.set(0, 1.2, 0);
 
-const downsampleShader = /* glsl */ `
-	precision highp float;
-	uniform sampler2D tDiffuse;
-	uniform vec2 uTexelSize;
-	varying vec2 vUv;
+objects.push(new THREE.Mesh(
+	new THREE.CylinderGeometry(0.8, 0.8, 3, 32),
+	new THREE.MeshPhongMaterial({ color: 0x4d66e6, shininess: 64, specular: 0x444444 }),
+));
+objects[objects.length - 1].position.set(3, 1.5, -1);
 
-	void main() {
-		vec4 sum = vec4(0.0);
-		sum += texture2D(tDiffuse, vUv + vec2(-1.0, -1.0) * uTexelSize);
-		sum += texture2D(tDiffuse, vUv + vec2( 1.0, -1.0) * uTexelSize);
-		sum += texture2D(tDiffuse, vUv + vec2(-1.0,  1.0) * uTexelSize);
-		sum += texture2D(tDiffuse, vUv + vec2( 1.0,  1.0) * uTexelSize);
-		gl_FragColor = sum * 0.25;
-	}
-`;
+objects.push(new THREE.Mesh(
+	new THREE.TorusGeometry(1, 0.4, 16, 48),
+	new THREE.MeshPhongMaterial({ color: 0xe6a84d, shininess: 64, specular: 0x444444 }),
+));
+objects[objects.length - 1].position.set(-1, 1, -8);
 
-const upsampleShader = /* glsl */ `
-	precision highp float;
-	uniform sampler2D tLowRes;
-	uniform sampler2D tHighRes;
-	uniform vec2 uTexelSize;
-	uniform float uHasHighRes;
-	varying vec2 vUv;
+objects.push(new THREE.Mesh(
+	new THREE.ConeGeometry(1, 2.5, 32),
+	new THREE.MeshPhongMaterial({ color: 0xcc44cc, shininess: 64, specular: 0x444444 }),
+));
+objects[objects.length - 1].position.set(5, 1.25, -15);
 
-	void main() {
-		vec4 sum = vec4(0.0);
-		sum += texture2D(tLowRes, vUv + vec2(-1.0, -1.0) * uTexelSize) * 1.0;
-		sum += texture2D(tLowRes, vUv + vec2( 0.0, -1.0) * uTexelSize) * 2.0;
-		sum += texture2D(tLowRes, vUv + vec2( 1.0, -1.0) * uTexelSize) * 1.0;
-		sum += texture2D(tLowRes, vUv + vec2(-1.0,  0.0) * uTexelSize) * 2.0;
-		sum += texture2D(tLowRes, vUv)                                  * 4.0;
-		sum += texture2D(tLowRes, vUv + vec2( 1.0,  0.0) * uTexelSize) * 2.0;
-		sum += texture2D(tLowRes, vUv + vec2(-1.0,  1.0) * uTexelSize) * 1.0;
-		sum += texture2D(tLowRes, vUv + vec2( 0.0,  1.0) * uTexelSize) * 2.0;
-		sum += texture2D(tLowRes, vUv + vec2( 1.0,  1.0) * uTexelSize) * 1.0;
-		gl_FragColor = sum / 16.0 + texture2D(tHighRes, vUv) * uHasHighRes;
-	}
-`;
+objects.push(new THREE.Mesh(
+	new THREE.BoxGeometry(1.5, 4, 1.5),
+	new THREE.MeshPhongMaterial({ color: 0x44cccc, shininess: 64, specular: 0x444444 }),
+));
+objects[objects.length - 1].position.set(-6, 2, -20);
 
-const MIP_LEVELS = 5;
+objects.push(new THREE.Mesh(
+	new THREE.SphereGeometry(2, 32, 16),
+	new THREE.MeshPhongMaterial({ color: 0xdddd44, shininess: 64, specular: 0x444444 }),
+));
+objects[objects.length - 1].position.set(2, 2, -30);
 
-interface BloomMip {
-	down: THREE.WebGLRenderTarget;
-	up: THREE.WebGLRenderTarget;
-	downMaterial: THREE.ShaderMaterial;
-	upMaterial: THREE.ShaderMaterial;
-	downScene: THREE.Scene;
-	upScene: THREE.Scene;
-}
+objects.push(new THREE.Mesh(
+	new THREE.TorusKnotGeometry(1, 0.3, 100, 16),
+	new THREE.MeshPhongMaterial({ color: 0xff6666, shininess: 64, specular: 0x444444 }),
+));
+objects[objects.length - 1].position.set(-4, 1.5, -40);
 
-const postQuad = new THREE.PlaneGeometry(2, 2);
-const postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+for (const obj of objects) scene.add(obj);
 
-const brightnessScene = new THREE.Scene();
-brightnessScene.add(new THREE.Mesh(postQuad, brightnessMaterial));
-
-const bloomMips: BloomMip[] = [];
-let mipW = Math.floor(rtWidth / 2);
-let mipH = Math.floor(rtHeight / 2);
-
-for (let i = 0; i < MIP_LEVELS; i++) {
-	const down = new THREE.WebGLRenderTarget(mipW, mipH, { type: THREE.FloatType });
-	const up = new THREE.WebGLRenderTarget(mipW, mipH, { type: THREE.FloatType });
-
-	const srcTexture = i === 0 ? brightnessTarget.texture : bloomMips[i - 1].down.texture;
-	const srcW = i === 0 ? rtWidth : bloomMips[i - 1].down.width;
-	const srcH = i === 0 ? rtHeight : bloomMips[i - 1].down.height;
-
-	const downMaterial = new THREE.ShaderMaterial({
-		uniforms: {
-			tDiffuse: { value: srcTexture },
-			uTexelSize: { value: new THREE.Vector2(1.0 / srcW, 1.0 / srcH) },
-		},
-		vertexShader: POST_VERTEX,
-		fragmentShader: downsampleShader,
-		depthTest: false,
-		depthWrite: false,
-	});
-
-	const isCoarsest = i === MIP_LEVELS - 1;
-	const lowResW = isCoarsest ? mipW : Math.floor(mipW / 2);
-	const lowResH = isCoarsest ? mipH : Math.floor(mipH / 2);
-	const upMaterial = new THREE.ShaderMaterial({
-		uniforms: {
-			tLowRes: { value: null },
-			tHighRes: { value: down.texture },
-			uTexelSize: { value: new THREE.Vector2(1.0 / lowResW, 1.0 / lowResH) },
-			uHasHighRes: { value: isCoarsest ? 0.0 : 1.0 },
-		},
-		vertexShader: POST_VERTEX,
-		fragmentShader: upsampleShader,
-		depthTest: false,
-		depthWrite: false,
-	});
-
-	const downScene = new THREE.Scene();
-	downScene.add(new THREE.Mesh(postQuad, downMaterial));
-	const upScene = new THREE.Scene();
-	upScene.add(new THREE.Mesh(postQuad, upMaterial));
-
-	bloomMips.push({ down, up, downMaterial, upMaterial, downScene, upScene });
-	mipW = Math.floor(mipW / 2);
-	mipH = Math.floor(mipH / 2);
-}
-
-const compositeMaterial = new THREE.ShaderMaterial({
-	uniforms: {
-		tScene: { value: renderTarget.texture },
-		tBloom: { value: bloomMips[0].up.texture },
-		uBloomStrength: { value: 2.0 },
-	},
-	vertexShader: POST_VERTEX,
-	fragmentShader: /* glsl */ `
-		precision highp float;
-		uniform sampler2D tScene;
-		uniform sampler2D tBloom;
-		uniform float uBloomStrength;
-		varying vec2 vUv;
-
-		void main() {
-			vec4 sceneColor = texture2D(tScene, vUv);
-			vec4 bloomColor = texture2D(tBloom, vUv);
-			gl_FragColor = sceneColor + bloomColor * uBloomStrength;
-		}
-	`,
-	depthTest: false,
-	depthWrite: false,
-});
-
-const compositeScene = new THREE.Scene();
-compositeScene.add(new THREE.Mesh(postQuad, compositeMaterial));
+const keys = new Set<string>();
+window.addEventListener("keydown", (e) => keys.add(e.key.toLowerCase()));
+window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 
 window.addEventListener("resize", () => {
 	camera.aspect = window.innerWidth / window.innerHeight;
 	camera.updateProjectionMatrix();
 	renderer.setPixelRatio(window.devicePixelRatio);
 	renderer.setSize(window.innerWidth, window.innerHeight);
-	const w = window.innerWidth * window.devicePixelRatio;
-	const h = window.innerHeight * window.devicePixelRatio;
-	renderTarget.setSize(w, h);
-	brightnessTarget.setSize(w, h);
-	let mw = Math.floor(w / 2);
-	let mh = Math.floor(h / 2);
-	for (let i = 0; i < MIP_LEVELS; i++) {
-		const mip = bloomMips[i];
-		mip.down.setSize(mw, mh);
-		mip.up.setSize(mw, mh);
-		const srcW = i === 0 ? w : bloomMips[i - 1].down.width;
-		const srcH = i === 0 ? h : bloomMips[i - 1].down.height;
-		mip.downMaterial.uniforms.uTexelSize.value.set(1.0 / srcW, 1.0 / srcH);
-		const isCoarsest = i === MIP_LEVELS - 1;
-		const lowResW = isCoarsest ? mw : Math.floor(mw / 2);
-		const lowResH = isCoarsest ? mh : Math.floor(mh / 2);
-		mip.upMaterial.uniforms.uTexelSize.value.set(1.0 / lowResW, 1.0 / lowResH);
-		mw = Math.floor(mw / 2);
-		mh = Math.floor(mh / 2);
-	}
 });
 
-const bloomSlider = document.getElementById("bloomStrength") as HTMLInputElement;
-const bloomValueLabel = document.getElementById("bloomValue") as HTMLSpanElement;
-bloomSlider.addEventListener("input", () => {
-	const v = Number.parseFloat(bloomSlider.value);
-	compositeMaterial.uniforms.uBloomStrength.value = v;
-	bloomValueLabel.textContent = v.toFixed(1);
-});
-
-const clock = new THREE.Clock();
+const moveDir = new THREE.Vector3();
+const MOVE_SPEED = 0.15;
 
 function render() {
-	const t = clock.getElapsedTime();
+	moveDir.set(0, 0, 0);
+	if (keys.has("w")) moveDir.z -= 1;
+	if (keys.has("s")) moveDir.z += 1;
+	if (keys.has("a")) moveDir.x -= 1;
+	if (keys.has("d")) moveDir.x += 1;
+	const hasHorizontal = moveDir.length() > 0;
+	if (hasHorizontal) {
+		moveDir.normalize().applyQuaternion(camera.quaternion);
+		moveDir.y = 0;
+	}
+	if (keys.has(" ")) moveDir.y += 1;
+	if (keys.has("shift")) moveDir.y -= 1;
+	if (moveDir.length() > 0) {
+		const speed = keys.has("control") ? MOVE_SPEED * 3 : MOVE_SPEED;
+		moveDir.normalize().multiplyScalar(speed);
+		camera.position.add(moveDir);
+		controls.target.add(moveDir);
+	}
 
-	pointLight.position.x = Math.sin(t * 0.5) * 5;
-	pointLight.position.z = Math.cos(t * 0.5) * 5;
-
-	renderer.setRenderTarget(renderTarget);
 	renderer.render(scene, camera);
-
-	renderer.setRenderTarget(brightnessTarget);
-	renderer.render(brightnessScene, postCamera);
-
-	for (let i = 0; i < MIP_LEVELS; i++) {
-		renderer.setRenderTarget(bloomMips[i].down);
-		renderer.render(bloomMips[i].downScene, postCamera);
-	}
-
-	for (let i = MIP_LEVELS - 1; i >= 0; i--) {
-		const mip = bloomMips[i];
-		const lowRes = i === MIP_LEVELS - 1 ? mip.down.texture : bloomMips[i + 1].up.texture;
-		mip.upMaterial.uniforms.tLowRes.value = lowRes;
-		renderer.setRenderTarget(mip.up);
-		renderer.render(mip.upScene, postCamera);
-	}
-
-	renderer.setRenderTarget(null);
-	renderer.render(compositeScene, postCamera);
 
 	controls.update();
 	requestAnimationFrame(render);
