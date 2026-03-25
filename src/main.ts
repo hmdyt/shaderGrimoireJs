@@ -216,6 +216,15 @@ window.addEventListener("resize", () => {
 	vBlurMaterial.uniforms.uTexelSize.value.set(1.0 / w, 1.0 / h);
 });
 
+// Bloom strength slider
+const bloomSlider = document.getElementById("bloomStrength") as HTMLInputElement;
+const bloomValueLabel = document.getElementById("bloomValue") as HTMLSpanElement;
+bloomSlider.addEventListener("input", () => {
+	const v = Number.parseFloat(bloomSlider.value);
+	compositeMaterial.uniforms.uBloomStrength.value = v;
+	bloomValueLabel.textContent = v.toFixed(1);
+});
+
 // Animation
 const clock = new THREE.Clock();
 
