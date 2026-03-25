@@ -26,13 +26,13 @@ dirLight.position.set(5, 10, 7);
 scene.add(dirLight);
 
 const floor = new THREE.Mesh(
-	new THREE.PlaneGeometry(100, 100),
+	new THREE.PlaneGeometry(1000, 1000),
 	new THREE.MeshPhongMaterial({ color: 0xcccccc }),
 );
 floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
 
-const grid = new THREE.GridHelper(100, 50, 0x666666, 0x666666);
+const grid = new THREE.GridHelper(1000, 500, 0x666666, 0x666666);
 grid.position.y = 0.01;
 scene.add(grid);
 
@@ -88,6 +88,56 @@ objects[objects.length - 1].position.set(-4, 1.5, -40);
 
 for (const obj of objects) scene.add(obj);
 
+const rtWidth = window.innerWidth * window.devicePixelRatio;
+const rtHeight = window.innerHeight * window.devicePixelRatio;
+const renderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight, {
+	depthTexture: new THREE.DepthTexture(rtWidth, rtHeight),
+});
+renderTarget.depthTexture.format = THREE.DepthFormat;
+renderTarget.depthTexture.type = THREE.UnsignedIntType;
+
+const POST_VERTEX = /* glsl */ `
+	varying vec2 vUv;
+	void main() {
+		vUv = uv;
+		gl_Position = vec4(position, 1.0);
+	}
+`;
+
+const depthMaterial = new THREE.ShaderMaterial({
+	uniforms: {
+		tDepth: { value: renderTarget.depthTexture },
+		uNear: { value: camera.near },
+		uFar: { value: camera.far },
+	},
+	vertexShader: POST_VERTEX,
+	fragmentShader: /* glsl */ `
+		precision highp float;
+		uniform sampler2D tDepth;
+		uniform float uNear;
+		uniform float uFar;
+		varying vec2 vUv;
+
+		float linearizeDepth(float d) {
+			float z = d * 2.0 - 1.0;
+			return (2.0 * uNear * uFar) / (uFar + uNear - z * (uFar - uNear));
+		}
+
+		void main() {
+			float depth = texture2D(tDepth, vUv).r;
+			float linear = linearizeDepth(depth) / uFar;
+			gl_FragColor = vec4(vec3(linear), 1.0);
+		}
+	`,
+	depthTest: false,
+	depthWrite: false,
+});
+
+const postQuad = new THREE.PlaneGeometry(2, 2);
+const postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const depthScene = new THREE.Scene();
+depthScene.add(new THREE.Mesh(postQuad, depthMaterial));
+
 const keys = new Set<string>();
 window.addEventListener("keydown", (e) => keys.add(e.key.toLowerCase()));
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
@@ -97,6 +147,9 @@ window.addEventListener("resize", () => {
 	camera.updateProjectionMatrix();
 	renderer.setPixelRatio(window.devicePixelRatio);
 	renderer.setSize(window.innerWidth, window.innerHeight);
+	const w = window.innerWidth * window.devicePixelRatio;
+	const h = window.innerHeight * window.devicePixelRatio;
+	renderTarget.setSize(w, h);
 });
 
 const moveDir = new THREE.Vector3();
@@ -122,7 +175,11 @@ function render() {
 		controls.target.add(moveDir);
 	}
 
+	renderer.setRenderTarget(renderTarget);
 	renderer.render(scene, camera);
+
+	renderer.setRenderTarget(null);
+	renderer.render(depthScene, postCamera);
 
 	controls.update();
 	requestAnimationFrame(render);
