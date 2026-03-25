@@ -108,6 +108,7 @@ const upsampleShader = /* glsl */ `
 	uniform sampler2D tLowRes;
 	uniform sampler2D tHighRes;
 	uniform vec2 uTexelSize;
+	uniform float uHasHighRes;
 	varying vec2 vUv;
 
 	void main() {
@@ -121,7 +122,7 @@ const upsampleShader = /* glsl */ `
 		sum += texture2D(tLowRes, vUv + vec2(-1.0,  1.0) * uTexelSize) * 1.0;
 		sum += texture2D(tLowRes, vUv + vec2( 0.0,  1.0) * uTexelSize) * 2.0;
 		sum += texture2D(tLowRes, vUv + vec2( 1.0,  1.0) * uTexelSize) * 1.0;
-		gl_FragColor = sum / 16.0 + texture2D(tHighRes, vUv);
+		gl_FragColor = sum / 16.0 + texture2D(tHighRes, vUv) * uHasHighRes;
 	}
 `;
 
@@ -165,11 +166,15 @@ for (let i = 0; i < MIP_LEVELS; i++) {
 		depthWrite: false,
 	});
 
+	const isCoarsest = i === MIP_LEVELS - 1;
+	const lowResW = isCoarsest ? mipW : Math.floor(mipW / 2);
+	const lowResH = isCoarsest ? mipH : Math.floor(mipH / 2);
 	const upMaterial = new THREE.ShaderMaterial({
 		uniforms: {
 			tLowRes: { value: null },
 			tHighRes: { value: down.texture },
-			uTexelSize: { value: new THREE.Vector2(1.0 / mipW, 1.0 / mipH) },
+			uTexelSize: { value: new THREE.Vector2(1.0 / lowResW, 1.0 / lowResH) },
+			uHasHighRes: { value: isCoarsest ? 0.0 : 1.0 },
 		},
 		vertexShader: POST_VERTEX,
 		fragmentShader: upsampleShader,
@@ -217,6 +222,7 @@ compositeScene.add(new THREE.Mesh(postQuad, compositeMaterial));
 window.addEventListener("resize", () => {
 	camera.aspect = window.innerWidth / window.innerHeight;
 	camera.updateProjectionMatrix();
+	renderer.setPixelRatio(window.devicePixelRatio);
 	renderer.setSize(window.innerWidth, window.innerHeight);
 	const w = window.innerWidth * window.devicePixelRatio;
 	const h = window.innerHeight * window.devicePixelRatio;
@@ -231,7 +237,10 @@ window.addEventListener("resize", () => {
 		const srcW = i === 0 ? w : bloomMips[i - 1].down.width;
 		const srcH = i === 0 ? h : bloomMips[i - 1].down.height;
 		mip.downMaterial.uniforms.uTexelSize.value.set(1.0 / srcW, 1.0 / srcH);
-		mip.upMaterial.uniforms.uTexelSize.value.set(1.0 / mw, 1.0 / mh);
+		const isCoarsest = i === MIP_LEVELS - 1;
+		const lowResW = isCoarsest ? mw : Math.floor(mw / 2);
+		const lowResH = isCoarsest ? mh : Math.floor(mh / 2);
+		mip.upMaterial.uniforms.uTexelSize.value.set(1.0 / lowResW, 1.0 / lowResH);
 		mw = Math.floor(mw / 2);
 		mh = Math.floor(mh / 2);
 	}
