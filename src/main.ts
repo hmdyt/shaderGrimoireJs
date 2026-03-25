@@ -6,7 +6,7 @@ const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({ canvas });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setClearColor(0xffffff);
+renderer.setClearColor(0x000000);
 
 // Scene
 const scene = new THREE.Scene();
@@ -53,8 +53,15 @@ for (const mesh of meshes) scene.add(mesh);
 // Post-processing render targets
 const rtWidth = window.innerWidth * window.devicePixelRatio;
 const rtHeight = window.innerHeight * window.devicePixelRatio;
-const renderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight);
-const blurTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight);
+const renderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight, {
+	type: THREE.FloatType,
+});
+const blurTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight, {
+	type: THREE.FloatType,
+});
+const brightnessTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight, {
+	type: THREE.FloatType,
+});
 
 const BLUR_VERTEX = /* glsl */ `
 	varying vec2 vUv;
@@ -64,10 +71,10 @@ const BLUR_VERTEX = /* glsl */ `
 	}
 `;
 
-// Pass 2: 水平ガウシアンブラー（右半分のみ）
+// Pass 3: 水平ガウシアンブラー
 const hBlurMaterial = new THREE.ShaderMaterial({
 	uniforms: {
-		tDiffuse: { value: renderTarget.texture },
+		tDiffuse: { value: brightnessTarget.texture },
 		uTexelSize: { value: new THREE.Vector2(1.0 / rtWidth, 1.0 / rtHeight) },
 	},
 	vertexShader: BLUR_VERTEX,
@@ -81,10 +88,6 @@ const hBlurMaterial = new THREE.ShaderMaterial({
 		const float SIGMA = 4.0;
 
 		void main() {
-			if (vUv.x <= 0.5) {
-				gl_FragColor = texture2D(tDiffuse, vUv);
-				return;
-			}
 			float weightSum = 0.0;
 			vec4 colorSum = vec4(0.0);
 			for (int i = -RADIUS; i <= RADIUS; i++) {
@@ -100,7 +103,7 @@ const hBlurMaterial = new THREE.ShaderMaterial({
 	depthWrite: false,
 });
 
-// Pass 3: 垂直ガウシアンブラー（右半分のみ）
+// Pass 4: 垂直ガウシアンブラー
 const vBlurMaterial = new THREE.ShaderMaterial({
 	uniforms: {
 		tDiffuse: { value: blurTarget.texture },
@@ -117,10 +120,6 @@ const vBlurMaterial = new THREE.ShaderMaterial({
 		const float SIGMA = 4.0;
 
 		void main() {
-			if (vUv.x <= 0.5) {
-				gl_FragColor = texture2D(tDiffuse, vUv);
-				return;
-			}
 			float weightSum = 0.0;
 			vec4 colorSum = vec4(0.0);
 			for (int i = -RADIUS; i <= RADIUS; i++) {
@@ -136,11 +135,70 @@ const vBlurMaterial = new THREE.ShaderMaterial({
 	depthWrite: false,
 });
 
+// 輝度抽出パス
+const brightnessMaterial = new THREE.ShaderMaterial({
+	uniforms: {
+		tDiffuse: { value: renderTarget.texture },
+		uThreshold: { value: 0.8 },
+	},
+	vertexShader: BLUR_VERTEX,
+	fragmentShader: /* glsl */ `
+		precision highp float;
+		uniform sampler2D tDiffuse;
+		uniform float uThreshold;
+		varying vec2 vUv;
+
+		void main() {
+			vec4 color = texture2D(tDiffuse, vUv);
+			float luminance = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
+			if (luminance < uThreshold) {
+				gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+			} else {
+				gl_FragColor = color;
+			}
+		}
+	`,
+	depthTest: false,
+	depthWrite: false,
+});
+
+// Pass 5: 合成（元シーン + ブルーム）
+const bloomBlurTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight, {
+	type: THREE.FloatType,
+});
+const compositeMaterial = new THREE.ShaderMaterial({
+	uniforms: {
+		tScene: { value: renderTarget.texture },
+		tBloom: { value: bloomBlurTarget.texture },
+		uBloomStrength: { value: 2.0 },
+	},
+	vertexShader: BLUR_VERTEX,
+	fragmentShader: /* glsl */ `
+		precision highp float;
+		uniform sampler2D tScene;
+		uniform sampler2D tBloom;
+		uniform float uBloomStrength;
+		varying vec2 vUv;
+
+		void main() {
+			vec4 sceneColor = texture2D(tScene, vUv);
+			vec4 bloomColor = texture2D(tBloom, vUv);
+			gl_FragColor = sceneColor + bloomColor * uBloomStrength;
+		}
+	`,
+	depthTest: false,
+	depthWrite: false,
+});
+
 const postQuad = new THREE.PlaneGeometry(2, 2);
+const brightnessScene = new THREE.Scene();
+brightnessScene.add(new THREE.Mesh(postQuad, brightnessMaterial));
 const hBlurScene = new THREE.Scene();
 hBlurScene.add(new THREE.Mesh(postQuad, hBlurMaterial));
 const vBlurScene = new THREE.Scene();
 vBlurScene.add(new THREE.Mesh(postQuad, vBlurMaterial));
+const compositeScene = new THREE.Scene();
+compositeScene.add(new THREE.Mesh(postQuad, compositeMaterial));
 const postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
 // Resize
@@ -152,6 +210,8 @@ window.addEventListener("resize", () => {
 	const h = window.innerHeight * window.devicePixelRatio;
 	renderTarget.setSize(w, h);
 	blurTarget.setSize(w, h);
+	brightnessTarget.setSize(w, h);
+	bloomBlurTarget.setSize(w, h);
 	hBlurMaterial.uniforms.uTexelSize.value.set(1.0 / w, 1.0 / h);
 	vBlurMaterial.uniforms.uTexelSize.value.set(1.0 / w, 1.0 / h);
 });
@@ -170,13 +230,21 @@ function render() {
 	renderer.setRenderTarget(renderTarget);
 	renderer.render(scene, camera);
 
-	// Pass 2: 水平ガウシアンブラー → blurTarget
+	// Pass 2: 輝度抽出 → brightnessTarget
+	renderer.setRenderTarget(brightnessTarget);
+	renderer.render(brightnessScene, postCamera);
+
+	// Pass 3: 水平ガウシアンブラー → blurTarget
 	renderer.setRenderTarget(blurTarget);
 	renderer.render(hBlurScene, postCamera);
 
-	// Pass 3: 垂直ガウシアンブラー → 画面
-	renderer.setRenderTarget(null);
+	// Pass 4: 垂直ガウシアンブラー → bloomBlurTarget
+	renderer.setRenderTarget(bloomBlurTarget);
 	renderer.render(vBlurScene, postCamera);
+
+	// Pass 5: 合成（元シーン + ブルーム） → 画面
+	renderer.setRenderTarget(null);
+	renderer.render(compositeScene, postCamera);
 
 	controls.update();
 	requestAnimationFrame(render);
