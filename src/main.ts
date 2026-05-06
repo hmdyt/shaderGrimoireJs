@@ -25,10 +25,7 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
 dirLight.position.set(5, 10, 7);
 scene.add(dirLight);
 
-const floor = new THREE.Mesh(
-	new THREE.PlaneGeometry(1000, 1000),
-	new THREE.MeshPhongMaterial({ color: 0xcccccc }),
-);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshPhongMaterial({ color: 0xcccccc }));
 floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
 
@@ -38,52 +35,68 @@ scene.add(grid);
 
 const objects: THREE.Mesh[] = [];
 
-objects.push(new THREE.Mesh(
-	new THREE.BoxGeometry(2, 2, 2),
-	new THREE.MeshPhongMaterial({ color: 0xe64d4d, shininess: 64, specular: 0x444444 }),
-));
+objects.push(
+	new THREE.Mesh(
+		new THREE.BoxGeometry(2, 2, 2),
+		new THREE.MeshPhongMaterial({ color: 0xe64d4d, shininess: 64, specular: 0x444444 }),
+	),
+);
 objects[objects.length - 1].position.set(-3, 1, 2);
 
-objects.push(new THREE.Mesh(
-	new THREE.SphereGeometry(1.2, 32, 16),
-	new THREE.MeshPhongMaterial({ color: 0x4de666, shininess: 64, specular: 0x444444 }),
-));
+objects.push(
+	new THREE.Mesh(
+		new THREE.SphereGeometry(1.2, 32, 16),
+		new THREE.MeshPhongMaterial({ color: 0x4de666, shininess: 64, specular: 0x444444 }),
+	),
+);
 objects[objects.length - 1].position.set(0, 1.2, 0);
 
-objects.push(new THREE.Mesh(
-	new THREE.CylinderGeometry(0.8, 0.8, 3, 32),
-	new THREE.MeshPhongMaterial({ color: 0x4d66e6, shininess: 64, specular: 0x444444 }),
-));
+objects.push(
+	new THREE.Mesh(
+		new THREE.CylinderGeometry(0.8, 0.8, 3, 32),
+		new THREE.MeshPhongMaterial({ color: 0x4d66e6, shininess: 64, specular: 0x444444 }),
+	),
+);
 objects[objects.length - 1].position.set(3, 1.5, -1);
 
-objects.push(new THREE.Mesh(
-	new THREE.TorusGeometry(1, 0.4, 16, 48),
-	new THREE.MeshPhongMaterial({ color: 0xe6a84d, shininess: 64, specular: 0x444444 }),
-));
+objects.push(
+	new THREE.Mesh(
+		new THREE.TorusGeometry(1, 0.4, 16, 48),
+		new THREE.MeshPhongMaterial({ color: 0xe6a84d, shininess: 64, specular: 0x444444 }),
+	),
+);
 objects[objects.length - 1].position.set(-1, 1, -8);
 
-objects.push(new THREE.Mesh(
-	new THREE.ConeGeometry(1, 2.5, 32),
-	new THREE.MeshPhongMaterial({ color: 0xcc44cc, shininess: 64, specular: 0x444444 }),
-));
+objects.push(
+	new THREE.Mesh(
+		new THREE.ConeGeometry(1, 2.5, 32),
+		new THREE.MeshPhongMaterial({ color: 0xcc44cc, shininess: 64, specular: 0x444444 }),
+	),
+);
 objects[objects.length - 1].position.set(5, 1.25, -15);
 
-objects.push(new THREE.Mesh(
-	new THREE.BoxGeometry(1.5, 4, 1.5),
-	new THREE.MeshPhongMaterial({ color: 0x44cccc, shininess: 64, specular: 0x444444 }),
-));
+objects.push(
+	new THREE.Mesh(
+		new THREE.BoxGeometry(1.5, 4, 1.5),
+		new THREE.MeshPhongMaterial({ color: 0x44cccc, shininess: 64, specular: 0x444444 }),
+	),
+);
 objects[objects.length - 1].position.set(-6, 2, -20);
 
-objects.push(new THREE.Mesh(
-	new THREE.SphereGeometry(2, 32, 16),
-	new THREE.MeshPhongMaterial({ color: 0xdddd44, shininess: 64, specular: 0x444444 }),
-));
+objects.push(
+	new THREE.Mesh(
+		new THREE.SphereGeometry(2, 32, 16),
+		new THREE.MeshPhongMaterial({ color: 0xdddd44, shininess: 64, specular: 0x444444 }),
+	),
+);
 objects[objects.length - 1].position.set(2, 2, -30);
 
-objects.push(new THREE.Mesh(
-	new THREE.TorusKnotGeometry(1, 0.3, 100, 16),
-	new THREE.MeshPhongMaterial({ color: 0xff6666, shininess: 64, specular: 0x444444 }),
-));
+objects.push(
+	new THREE.Mesh(
+		new THREE.TorusKnotGeometry(1, 0.3, 100, 16),
+		new THREE.MeshPhongMaterial({ color: 0xff6666, shininess: 64, specular: 0x444444 }),
+	),
+);
 objects[objects.length - 1].position.set(-4, 1.5, -40);
 
 for (const obj of objects) scene.add(obj);
@@ -97,6 +110,25 @@ const renderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight, {
 	depthTexture,
 });
 
+const blurRT_H = new THREE.WebGLRenderTarget(rtWidth, rtHeight, {
+	depthBuffer: false,
+	stencilBuffer: false,
+	minFilter: THREE.LinearFilter,
+	magFilter: THREE.LinearFilter,
+});
+const blurRT_V = new THREE.WebGLRenderTarget(rtWidth, rtHeight, {
+	depthBuffer: false,
+	stencilBuffer: false,
+	minFilter: THREE.LinearFilter,
+	magFilter: THREE.LinearFilter,
+});
+
+// sigma = 8.0, 中心 + 両側12 = 25タップ相当の正規化済みGaussian重み
+const GAUSSIAN_WEIGHTS = [
+	0.056535, 0.056095, 0.0547956, 0.0526964, 0.049892, 0.0465044, 0.0426749, 0.0385535, 0.0342902, 0.0300255, 0.0258836,
+	0.0219671, 0.0183542,
+];
+
 const POST_VERTEX = /* glsl */ `
 	varying vec2 vUv;
 	void main() {
@@ -105,18 +137,71 @@ const POST_VERTEX = /* glsl */ `
 	}
 `;
 
-const depthMaterial = new THREE.ShaderMaterial({
+const BLUR_FRAGMENT = /* glsl */ `
+	precision highp float;
+	uniform sampler2D tSrc;
+	uniform vec2 uTexelSize;
+	uniform vec2 uDirection;
+	uniform float uWeights[13];
+	varying vec2 vUv;
+
+	void main() {
+		vec3 sum = texture2D(tSrc, vUv).rgb * uWeights[0];
+		for (int i = 1; i < 13; i++) {
+			vec2 off = uDirection * uTexelSize * float(i);
+			sum += texture2D(tSrc, vUv + off).rgb * uWeights[i];
+			sum += texture2D(tSrc, vUv - off).rgb * uWeights[i];
+		}
+		gl_FragColor = vec4(sum, 1.0);
+	}
+`;
+
+const blurMaterialH = new THREE.ShaderMaterial({
 	uniforms: {
+		tSrc: { value: renderTarget.texture },
+		uTexelSize: { value: new THREE.Vector2(1 / rtWidth, 1 / rtHeight) },
+		uDirection: { value: new THREE.Vector2(1, 0) },
+		uWeights: { value: GAUSSIAN_WEIGHTS },
+	},
+	vertexShader: POST_VERTEX,
+	fragmentShader: BLUR_FRAGMENT,
+	depthTest: false,
+	depthWrite: false,
+});
+
+const blurMaterialV = new THREE.ShaderMaterial({
+	uniforms: {
+		tSrc: { value: blurRT_H.texture },
+		uTexelSize: { value: new THREE.Vector2(1 / rtWidth, 1 / rtHeight) },
+		uDirection: { value: new THREE.Vector2(0, 1) },
+		uWeights: { value: GAUSSIAN_WEIGHTS },
+	},
+	vertexShader: POST_VERTEX,
+	fragmentShader: BLUR_FRAGMENT,
+	depthTest: false,
+	depthWrite: false,
+});
+
+const compositeMaterial = new THREE.ShaderMaterial({
+	uniforms: {
+		tColor: { value: renderTarget.texture },
+		tBlurred: { value: blurRT_V.texture },
 		tDepth: { value: renderTarget.depthTexture },
 		uNear: { value: camera.near },
 		uFar: { value: camera.far },
+		uFocusDistance: { value: 15.0 },
+		uFocusRange: { value: 5.0 },
 	},
 	vertexShader: POST_VERTEX,
 	fragmentShader: /* glsl */ `
 		precision highp float;
+		uniform sampler2D tColor;
+		uniform sampler2D tBlurred;
 		uniform sampler2D tDepth;
 		uniform float uNear;
 		uniform float uFar;
+		uniform float uFocusDistance;
+		uniform float uFocusRange;
 		varying vec2 vUv;
 
 		float linearizeDepth(float d) {
@@ -125,9 +210,11 @@ const depthMaterial = new THREE.ShaderMaterial({
 		}
 
 		void main() {
-			float depth = texture2D(tDepth, vUv).r;
-			float linear = linearizeDepth(depth) / uFar;
-			gl_FragColor = vec4(vec3(linear), 1.0);
+			float linear = linearizeDepth(texture2D(tDepth, vUv).r);
+			float coc = clamp((linear - uFocusDistance) / uFocusRange, 0.0, 1.0);
+			vec3 sharp = texture2D(tColor, vUv).rgb;
+			vec3 blurred = texture2D(tBlurred, vUv).rgb;
+			gl_FragColor = vec4(mix(sharp, blurred, coc), 1.0);
 		}
 	`,
 	depthTest: false,
@@ -136,8 +223,12 @@ const depthMaterial = new THREE.ShaderMaterial({
 
 const postQuad = new THREE.PlaneGeometry(2, 2);
 const postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-const depthScene = new THREE.Scene();
-depthScene.add(new THREE.Mesh(postQuad, depthMaterial));
+const blurSceneH = new THREE.Scene();
+blurSceneH.add(new THREE.Mesh(postQuad, blurMaterialH));
+const blurSceneV = new THREE.Scene();
+blurSceneV.add(new THREE.Mesh(postQuad, blurMaterialV));
+const compositeScene = new THREE.Scene();
+compositeScene.add(new THREE.Mesh(postQuad, compositeMaterial));
 
 const keys = new Set<string>();
 window.addEventListener("keydown", (e) => keys.add(e.key.toLowerCase()));
@@ -151,6 +242,10 @@ window.addEventListener("resize", () => {
 	const w = window.innerWidth * window.devicePixelRatio;
 	const h = window.innerHeight * window.devicePixelRatio;
 	renderTarget.setSize(w, h);
+	blurRT_H.setSize(w, h);
+	blurRT_V.setSize(w, h);
+	blurMaterialH.uniforms.uTexelSize.value.set(1 / w, 1 / h);
+	blurMaterialV.uniforms.uTexelSize.value.set(1 / w, 1 / h);
 });
 
 const moveDir = new THREE.Vector3();
@@ -179,8 +274,14 @@ function render() {
 	renderer.setRenderTarget(renderTarget);
 	renderer.render(scene, camera);
 
+	renderer.setRenderTarget(blurRT_H);
+	renderer.render(blurSceneH, postCamera);
+
+	renderer.setRenderTarget(blurRT_V);
+	renderer.render(blurSceneV, postCamera);
+
 	renderer.setRenderTarget(null);
-	renderer.render(depthScene, postCamera);
+	renderer.render(compositeScene, postCamera);
 
 	controls.update();
 	requestAnimationFrame(render);
